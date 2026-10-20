@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from .brains import BRAINS, COLORS, Plan, make_brain
 from .sim import SimRobot
@@ -29,26 +29,48 @@ def run(brain, seed: int = 0, instruction: str | None = None,
     grabbed = robot.pick_and_place(robot.normalized_to_world(plan.pick),
                                    robot.normalized_to_world(plan.place))
 
+    on_tray = robot.cubes_on_tray()
     result = {"seed": seed, "instruction": instruction, "pick": plan.pick, "place": plan.place,
-              "grabbed": grabbed, "on_tray": robot.cubes_on_tray(), "brain_said": plan.raw}
+              "grabbed": grabbed, "on_tray": on_tray, "success": judge(instruction, on_tray),
+              "brain_said": plan.raw, "brain_view": _annotate(image, plan),
+              "frames": [Image.fromarray(f) for f in robot.frames]}
     if out_dir is not None:
         out_dir.mkdir(parents=True, exist_ok=True)
-        _annotate(image, plan).save(out_dir / f"seed{seed}_brain_view.png")
-        if gif and robot.frames:
-            frames = [Image.fromarray(f) for f in robot.frames]
-            frames[0].save(out_dir / f"seed{seed}.gif", save_all=True, append_images=frames[1:],
-                           duration=60, loop=0)
+        result["brain_view"].save(out_dir / f"seed{seed}_brain_view.png")
+        if result["frames"]:
+            save_gif(result["frames"], out_dir / f"seed{seed}.gif")
     return result
+
+
+def judge(instruction: str, on_tray: list[str]) -> bool | None:
+    """Success: exactly the cube named first in the instruction ended up on the tray.
+
+    Returns None when the instruction names no colour, so there is nothing to check against.
+    """
+    named = [w for w in instruction.lower().replace(".", " ").split() if w in COLORS and w != "blue"]
+    return on_tray == [named[0] + "_cube"] if named else None
+
+
+def save_gif(frames: list[Image.Image], target) -> None:
+    """Write frames as an animated GIF (a path or a file-like object).
+
+    Each frame is reduced to 64 colours, which keeps the file about four times smaller.
+    """
+    frames = [f.convert("P", palette=Image.ADAPTIVE, colors=64) for f in frames]
+    frames[0].save(target, format="GIF", save_all=True, append_images=frames[1:], duration=60, loop=0)
 
 
 def _annotate(image, plan: Plan) -> Image.Image:
     """The camera image with the brain's two points drawn on it: what did it 'see'?"""
     img = Image.fromarray(image)
     draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default(size=20)
     for (y, x), color, label in ((plan.pick, "magenta", "pick"), (plan.place, "cyan", "place")):
         u, v = x / 1000 * img.width, y / 1000 * img.height
-        draw.ellipse((u - 8, v - 8, u + 8, v + 8), outline=color, width=3)
-        draw.text((u + 10, v - 6), label, fill=color)
+        draw.ellipse((u - 16, v - 16, u + 16, v + 16), outline=color, width=4)
+        draw.line((u - 6, v, u + 6, v), fill=color, width=2)
+        draw.line((u, v - 6, u, v + 6), fill=color, width=2)
+        draw.text((u + 20, v - 12), label, fill=color, font=font, stroke_width=2, stroke_fill="black")
     return img
 
 
@@ -67,9 +89,7 @@ def main() -> None:
     successes = 0
     for seed in range(args.seed, args.seed + args.episodes):
         r = run(brain, seed, args.instruction, args.out, args.gif)
-        # Success: exactly the cube named first in the instruction ended up on the tray.
-        named = [w for w in r["instruction"].lower().replace(".", " ").split() if w in COLORS]
-        ok = bool(named) and r["on_tray"] == [named[0] + "_cube"]
+        ok = bool(r["success"])
         successes += ok
         print(f"seed {seed}: {'SUCCESS' if ok else 'FAIL'}  {r['instruction']!r}  "
               f"pick={_fmt(r['pick'])} place={_fmt(r['place'])}  on tray: {r['on_tray']}")

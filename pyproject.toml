@@ -16,4 +16,4 @@ build-backend = "setuptools.build_meta"
 packages = ["robot_manipulation"]
 
 [tool.setuptools.package-data]
-robot_manipulation = ["assets/*.xml"]
+robot_manipulation = ["assets/*.xml", "app.html"]

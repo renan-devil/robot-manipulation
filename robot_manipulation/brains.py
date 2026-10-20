@@ -115,15 +115,17 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = 120) -> dic
 def _api_key(variable: str) -> str:
     key = os.environ.get(variable)
     if not key:
-        raise RuntimeError(f"set {variable} in your environment (see README, 'Use a real AI brain')")
+        raise RuntimeError(f"no API key: paste one in the page's API key field, or set {variable} "
+                           "in your environment (see README, 'Use a real AI brain')")
     return key
 
 
 class GeminiBrain:
     """Gemini Robotics-ER (Google DeepMind): a vision-language model trained for pointing and spatial reasoning."""
 
-    def __init__(self, model: str = "gemini-robotics-er-2-preview"):
+    def __init__(self, model: str = "gemini-robotics-er-2-preview", api_key: str | None = None):
         self.model = model
+        self.api_key = api_key  # None: read GEMINI_API_KEY from the environment
 
     def plan(self, image: np.ndarray, instruction: str) -> Plan:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
@@ -134,7 +136,7 @@ class GeminiBrain:
             ]}],
             "generationConfig": {"temperature": 0.2},
         }
-        reply = _post_json(url, {"x-goog-api-key": _api_key("GEMINI_API_KEY")}, body)
+        reply = _post_json(url, {"x-goog-api-key": (self.api_key or _api_key("GEMINI_API_KEY"))}, body)
         parts = reply["candidates"][0]["content"]["parts"]
         return parse_plan("".join(p.get("text", "") for p in parts))
 
@@ -142,8 +144,9 @@ class GeminiBrain:
 class MistralBrain:
     """A Mistral vision model. General-purpose, not trained for robotics: expect rougher points."""
 
-    def __init__(self, model: str = "mistral-medium-latest"):
+    def __init__(self, model: str = "mistral-medium-latest", api_key: str | None = None):
         self.model = model
+        self.api_key = api_key  # None: read MISTRAL_API_KEY from the environment
 
     def plan(self, image: np.ndarray, instruction: str) -> Plan:
         body = {
@@ -156,13 +159,15 @@ class MistralBrain:
             ]}],
         }
         reply = _post_json("https://api.mistral.ai/v1/chat/completions",
-                           {"Authorization": "Bearer " + _api_key("MISTRAL_API_KEY")}, body)
+                           {"Authorization": "Bearer " + (self.api_key or _api_key("MISTRAL_API_KEY"))}, body)
         return parse_plan(reply["choices"][0]["message"]["content"])
 
 
 BRAINS = {"color": ColorBrain, "gemini": GeminiBrain, "mistral": MistralBrain}
 
 
-def make_brain(name: str, model: str | None = None):
-    cls = BRAINS[name]
-    return cls(model) if model else cls()
+def make_brain(name: str, model: str | None = None, api_key: str | None = None):
+    if name == "color":
+        return ColorBrain()
+    options = {"model": model} if model else {}
+    return BRAINS[name](api_key=api_key, **options)

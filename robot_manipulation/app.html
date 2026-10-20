@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robot Arm Control</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e2e2e0;
+    --accent: #2f5bd3; --accent-text: #ffffff; --ok: #1f7a3d; --ok-bg: #e6f4ea; --bad: #b3261e; --bad-bg: #fce8e6;
+    --idle-bg: #eef0f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151517; --panel: #1f1f22; --text: #ececee; --muted: #9a9aa0; --line: #333338;
+      --accent: #6e8ff0; --accent-text: #0d0d10; --ok: #7ed39a; --ok-bg: #173323; --bad: #f2a29b; --bad-bg: #3a1a18;
+      --idle-bg: #26272c;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; }
+  label:first-child { margin-top: 0; }
+  .hint { color: var(--muted); font-size: 13px; font-weight: 400; }
+  input, select, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+         border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  textarea { resize: vertical; min-height: 64px; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; }
+  button { font: inherit; border-radius: 8px; padding: 8px 14px; cursor: pointer;
+           border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  button.primary { width: 100%; margin-top: 18px; padding: 12px; font-weight: 600;
+           background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .55; cursor: wait; }
+  #status { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--idle-bg); font-size: 14px; }
+  #status.ok { background: var(--ok-bg); color: var(--ok); }
+  #status.bad { background: var(--bad-bg); color: var(--bad); }
+  .views { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 560px) { .views { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  figure img { width: 100%; display: block; border-radius: 8px; border: 1px solid var(--line); background: var(--idle-bg);
+               aspect-ratio: 4 / 3; object-fit: contain; }
+  .placeholder { aspect-ratio: 4 / 3; display: grid; place-items: center; border-radius: 8px;
+                 border: 1px dashed var(--line); color: var(--muted); background: var(--idle-bg); }
+  figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  details { margin-top: 16px; color: var(--muted); font-size: 13px; }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); padding: 10px; border-radius: 8px; }
+  .examples button { font-size: 13px; padding: 4px 8px; margin: 6px 6px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Robot arm control</h1>
+  <p class="sub">Type an instruction. The AI looks at the camera image, points at what to pick and where to put it, and the arm does it.</p>
+
+  <div class="layout">
+    <section class="panel">
+      <label for="seed">Scene <span class="hint">: each number is a different table layout</span></label>
+      <div class="row">
+        <input id="seed" type="number" min="0" value="0">
+        <button id="shuffle" title="Random scene">New scene</button>
+      </div>
+
+      <label for="instruction">Instruction</label>
+      <textarea id="instruction"></textarea>
+      <div class="examples">
+        <button data-text="Put the red cube on the blue tray.">red</button>
+        <button data-text="Put the green cube on the blue tray.">green</button>
+        <button data-text="Put the yellow cube on the blue tray.">yellow</button>
+        <button data-text="Put the cube closest to the robot on the blue tray.">closest (AI only)</button>
+      </div>
+
+      <label for="brain">Brain</label>
+      <select id="brain">
+        <option value="color">Colour finder (offline, free)</option>
+        <option value="gemini">Gemini Robotics-ER (Google DeepMind)</option>
+        <option value="mistral">Mistral vision model</option>
+      </select>
+
+      <div id="keybox" hidden>
+        <label for="key">API key <span class="hint">: used for this run only, never saved</span></label>
+        <input id="key" type="password" autocomplete="off" placeholder="paste your key">
+      </div>
+
+      <button id="go" class="primary">Run</button>
+      <div id="status">Ready.</div>
+    </section>
+
+    <section class="panel">
+      <div class="views">
+        <figure>
+          <img id="view" alt="Overhead camera image">
+          <figcaption id="viewcap">What the robot's camera sees.</figcaption>
+        </figure>
+        <figure>
+          <img id="video" alt="Video of the arm" hidden>
+          <div id="novideo" class="placeholder">Press Run to see the arm move.</div>
+          <figcaption>The arm in action.</figcaption>
+        </figure>
+      </div>
+      <details>
+        <summary>What the brain answered</summary>
+        <pre id="raw">Nothing yet.</pre>
+      </details>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let keyReady = {};
+
+function setStatus(text, kind = "") { $("status").textContent = text; $("status").className = kind; }
+
+async function loadScene() {
+  setStatus("Loading scene…");
+  const data = await (await fetch("/api/scene?seed=" + ($("seed").value || 0))).json();
+  if (data.error) return setStatus(data.error, "bad");
+  $("view").src = data.image;
+  $("viewcap").textContent = "What the robot's camera sees.";
+  $("video").hidden = true;
+  $("novideo").hidden = false;
+  $("instruction").value = data.instruction;
+  setStatus("Ready.");
+}
+
+function updateKeyBox() {
+  const brain = $("brain").value;
+  $("keybox").hidden = brain === "color" || keyReady[brain];
+}
+
+async function go() {
+  $("go").disabled = true;
+  setStatus("Thinking and moving… (an AI brain can take 10 to 30 seconds)");
+  try {
+    const response = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seed: Number($("seed").value || 0), instruction: $("instruction").value,
+                             brain: $("brain").value, api_key: $("key").value }),
+    });
+    const r = await response.json();
+    if (r.error) { setStatus(r.error, "bad"); return; }
+    $("view").src = r.brain_view;
+    $("viewcap").textContent = "Where the brain pointed: magenta = pick, cyan = place.";
+    $("video").src = r.video;
+    $("video").hidden = false;
+    $("novideo").hidden = true;
+    $("raw").textContent = r.brain_said;
+    const onTray = r.on_tray.length ? r.on_tray.join(", ").replaceAll("_", " ") : "nothing";
+    if (!r.grabbed) setStatus("The arm grabbed nothing: the brain pointed at an empty spot.", "bad");
+    else if (r.success === true) setStatus("Success. On the tray: " + onTray + ".", "ok");
+    else if (r.success === false) setStatus("Not what was asked. On the tray: " + onTray + ".", "bad");
+    else setStatus("Done. On the tray: " + onTray + ". (No colour named, so judge it yourself.)");
+  } catch (e) {
+    setStatus("Could not reach the robot server. Is it still running? " + e, "bad");
+  } finally {
+    $("go").disabled = false;
+  }
+}
+
+$("seed").addEventListener("change", loadScene);
+$("shuffle").addEventListener("click", () => { $("seed").value = Math.floor(Math.random() * 1000); loadScene(); });
+$("brain").addEventListener("change", updateKeyBox);
+$("go").addEventListener("click", go);
+document.querySelectorAll(".examples button").forEach((b) =>
+  b.addEventListener("click", () => { $("instruction").value = b.dataset.text; }));
+
+fetch("/api/brains").then((r) => r.json()).then((k) => { keyReady = k; updateKeyBox(); });
+loadScene();
+</script>
+</body>
+</html>

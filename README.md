@@ -33,16 +33,33 @@ What the brain saw, and where it pointed:
 
 ## Run it
 
-You need Python 3.10 or newer.
+You need Python 3.10 or newer. Once, in a terminal, from this folder:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e '.[dev]'
+```
+
+### The control page (easiest)
+
+```bash
+python -m robot_manipulation.app
+```
+
+Your browser opens on http://localhost:8000. Pick a scene, type or choose an instruction, pick a brain, press **Run**. You see where the brain pointed and a video of the arm. To use Gemini or Mistral, paste your API key in the field that appears; it is used for that run only and never saved. Press Ctrl+C in the terminal to stop.
+
+![The control page after a successful run](docs/control_page.png)
+
+The page is served by Python's built-in web server and only your own computer can reach it. It runs one job at a time, so if two browser tabs press Run, the second waits for the first: one robot, one queue.
+
+### The command line (for batches)
+
+```bash
 
 python -m robot_manipulation.run                    # one episode, offline colour brain
 python -m robot_manipulation.run --episodes 20      # success rate over 20 random scenes
 python -m robot_manipulation.run --seed 3 --gif     # also save a video in out/
-pytest                                              # 19 tests, about 3 seconds
+pytest                                              # 22 tests, about 10 seconds
 ```
 
 The `out/` folder gets, for each episode, the camera image with the brain's two points drawn on it, plus a GIF with `--gif`.
@@ -73,6 +90,7 @@ python -m robot_manipulation.run --brain mistral --episodes 10
 | `robot_manipulation/sim.py` | The body: scene, camera geometry, inverse kinematics, pick and place |
 | `robot_manipulation/brains.py` | The brains: colour finder, Gemini, Mistral, and the shared answer format |
 | `robot_manipulation/run.py` | The sense → think → act loop and the command line |
+| `robot_manipulation/app.py`, `app.html` | The control page: a small web server and one HTML page |
 | `robot_manipulation/assets/desk_arm.xml` | The MuJoCo model: a 4-joint arm, three cubes, a tray, two cameras |
 | `tests/` | Kinematics, camera geometry, end-to-end runs, API request formats |
 | `docs/BUILD_PLAN.md` | Phases, costs and decision points |
