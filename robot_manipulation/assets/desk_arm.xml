@@ -1,0 +1,80 @@
+<!--
+  A small 4-joint desk arm with a suction cup, three cubes and a blue tray.
+  Units: metres, kilograms, angles in degrees (MJCF default for ranges).
+  Geom group 0 = things the camera's depth ray may hit (table, tray, cubes);
+  group 1 = the robot, which the ray ignores and which collides with nothing.
+-->
+<mujoco model="desk_arm">
+  <option timestep="0.002"/>
+  <visual>
+    <global offwidth="640" offheight="480"/>
+    <quality shadowsize="2048"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1=".78 .78 .76" rgb2=".72 .72 .70" width="512" height="512"/>
+    <material name="table" texture="grid" texrepeat="8 8"/>
+  </asset>
+
+  <default>
+    <default class="robot">
+      <geom contype="0" conaffinity="0" group="1" rgba=".88 .88 .92 1"/>
+      <joint type="hinge" axis="0 1 0" damping="1"/>
+    </default>
+    <default class="cube">
+      <geom type="box" size=".025 .025 .025" mass=".05" friction="1 .005 .0001"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light pos="0.35 0 2" dir="0 0 -1" diffuse=".7 .7 .7" castshadow="true"/>
+    <light pos="-1 -1 2" dir="1 1 -2" diffuse=".3 .3 .3" castshadow="false"/>
+    <geom name="table" type="plane" size="1.5 1.5 .05" material="table"/>
+
+    <!-- The robot's eye: straight down over the workspace. Image up = world +x. -->
+    <camera name="top" pos="0.35 0 0.85" xyaxes="0 -1 0 1 0 0" fovy="60"/>
+    <!-- A three-quarter view, only used to make videos for humans. -->
+    <body name="workspace" pos="0.3 0 0.1"/>
+    <camera name="front" pos="1.3 -1.0 0.95" mode="targetbody" target="workspace" fovy="45"/>
+
+    <body name="base" childclass="robot">
+      <geom type="cylinder" size=".07 .05" pos="0 0 .05" rgba=".25 .25 .3 1"/>
+      <body name="turret" pos="0 0 .1">
+        <joint name="yaw" axis="0 0 1" range="-170 170"/>
+        <geom type="cylinder" size=".05 .05" pos="0 0 .05" rgba=".25 .25 .3 1"/>
+        <body name="upper_arm" pos="0 0 .1">
+          <joint name="shoulder" range="-100 100"/>
+          <geom type="capsule" fromto="0 0 0 0 0 .3" size=".03"/>
+          <body name="forearm" pos="0 0 .3">
+            <joint name="elbow" range="-160 160"/>
+            <geom type="capsule" fromto="0 0 0 0 0 .3" size=".025"/>
+            <body name="hand" pos="0 0 .3">
+              <joint name="wrist" range="-160 160"/>
+              <geom type="capsule" fromto="0 0 0 0 0 .1" size=".02"/>
+              <geom name="cup" type="cylinder" pos="0 0 .11" size=".022 .01" rgba=".1 .1 .1 1"/>
+              <!-- Tool tip: its z axis points out of the suction cup. -->
+              <site name="tool" pos="0 0 .12"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- Positions below are placeholders: SimRobot.reset() shuffles them. -->
+    <body name="blue_tray" pos=".35 -.2 .005">
+      <geom type="box" size=".07 .07 .005" rgba=".1 .25 .85 1"/>
+    </body>
+    <body name="red_cube" pos=".4 .15 .025">
+      <freejoint/>
+      <geom class="cube" rgba=".85 .1 .1 1"/>
+    </body>
+    <body name="green_cube" pos=".3 .1 .025">
+      <freejoint/>
+      <geom class="cube" rgba=".1 .7 .2 1"/>
+    </body>
+    <body name="yellow_cube" pos=".45 0 .025">
+      <freejoint/>
+      <geom class="cube" rgba=".95 .8 .1 1"/>
+    </body>
+  </worldbody>
+</mujoco>

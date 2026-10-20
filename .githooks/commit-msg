@@ -1,0 +1,8 @@
+#!/bin/sh
+# Repository convention: every commit is co-authored by Renan and Claude.
+# Renan is the author (git config user.name / user.email); this hook adds
+# Claude as co-author when the message does not already name Claude.
+# Enable once per clone:  git config core.hooksPath .githooks
+if ! grep -qi '^Co-Authored-By: Claude' "$1"; then
+  printf '\nCo-Authored-By: Claude <noreply@anthropic.com>\n' >> "$1"
+fi
